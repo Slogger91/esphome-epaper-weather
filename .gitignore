@@ -1,0 +1,31 @@
+# --- ESPHome build artifacts ---
+.esphome/
+*.bin
+*.elf
+*.map
+*.partitions.bin
+*.pio
+.pio/
+build/
+
+# --- Secrets / local config ---
+secrets.yaml
+secrets.yml
+*.secret*
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Optional: if you keep per-user overrides locally
+local.yaml
+local_*.yaml
+
+# --- Logs ---
+*.log
+
+# --- OS/editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

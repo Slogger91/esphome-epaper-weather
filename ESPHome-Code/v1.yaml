@@ -1,0 +1,218 @@
+# -------------------------------------------------------------------
+# Copy and paste this entire code block under captive_portal in ESPHome Builder.
+# -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Home Assistant sensors
+# These pull weather data from Home Assistant entities.
+# Replace `example_suburb` with your own location/entity names.
+# -------------------------------------------------------------------
+sensor:
+  # Daily minimum temperature
+  - platform: homeassistant
+    id: min_temp
+    entity_id: sensor.ww_example_suburb_min_temperature_0
+
+  # Daily maximum temperature
+  - platform: homeassistant
+    id: max_temp
+    entity_id: sensor.ww_example_suburb_max_temperature_0
+
+  # Daily rain probability (%)
+  - platform: homeassistant
+    id: rain_chance
+    entity_id: sensor.ww_example_suburb_rain_probability_0
+
+
+# -------------------------------------------------------------------
+# Time source + scheduled refreshes
+# Uses Home Assistant as the authoritative time source.
+# The e-paper display is refreshed at fixed times each day to
+# minimise wear and power usage.
+# Change as per requirements.
+# -------------------------------------------------------------------
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      # Morning refresh
+      - hours: 5
+        minutes: 0
+        seconds: 0
+        then:
+          - component.update: epaper
+
+      # Midday refresh
+      - hours: 12
+        minutes: 0
+        seconds: 0
+        then:
+          - component.update: epaper
+
+      # Afternoon refresh
+      - hours: 17
+        minutes: 0
+        seconds: 0
+        then:
+          - component.update: epaper
+
+
+# -------------------------------------------------------------------
+# Boot retry refresh script
+# On boot:
+# 1. Immediately renders the display so the user sees a
+#    "Starting up / Waiting for data" screen.
+# 2. Waits 60 seconds to allow HA time + sensors to populate.
+# 3. Refreshes again so real data is shown.
+# -------------------------------------------------------------------
+script:
+  - id: boot_retry_refresh
+    mode: restart
+    then:
+      # Initial render (shows waiting state)
+      - component.update: epaper
+
+      # Allow time for HA data to become available
+      - delay: 60s
+
+      # Second render with populated data (usually ready by now)
+      - component.update: epaper
+
+
+# -------------------------------------------------------------------
+# SPI bus configuration
+# Defines the hardware SPI pins used by the e-paper display.
+# -------------------------------------------------------------------
+spi:
+  clk_pin: 4
+  mosi_pin: 6
+
+
+# -------------------------------------------------------------------
+# Waveshare e-paper display configuration and render logic
+# - update_interval is set to "never" so refreshes are fully manual.
+# - The lambda handles:
+#   * boot state (no HA time yet)
+#   * waiting-for-data state
+#   * normal rendering once data is available
+# -------------------------------------------------------------------
+display:
+  - platform: waveshare_epaper
+    id: epaper
+    model: 2.90in3c
+    cs_pin: 7
+    dc_pin: 1
+    busy_pin: 3
+    reset_pin: 2
+    rotation: 270
+    update_interval: never
+    lambda: |-
+      // Screen width (px), used for right-aligning text
+      const int W = 296;
+
+      // Common layout positions
+      const int x_icon = 10;
+      const int x_text = 52;
+
+      const int y_top  = 6;    // date row
+      const int y_temp = 44;   // temperature row
+      const int y_rain = 84;   // rain row
+      const int y_foot = 112;  // footer row
+
+      // Explicit red (required for tri-colour e-paper)
+      auto red = Color(255, 0, 0);
+
+      // -------------------------------------------------
+      // Stage 1: Booting / HA time not yet available
+      // -------------------------------------------------
+      if (!id(ha_time).now().is_valid()) {
+        it.print(10, 20, id(font_text), "Starting up...");
+        it.print(10, 52, id(font_text), "Waiting for time");
+        return;
+      }
+
+      // Current time (from Home Assistant)
+      auto now = id(ha_time).now();
+
+      // Read sensor values
+      float tmin = id(min_temp).state;
+      float tmax = id(max_temp).state;
+      float rain = id(rain_chance).state;
+
+      // Validate sensor data
+      bool temps_ready = !isnan(tmin) && !isnan(tmax);
+      bool rain_ready  = !isnan(rain);
+
+      // -------------------------------------------------
+      // Date row (top-left)
+      // -------------------------------------------------
+      it.print(x_icon, y_top, id(font_icons), "\U000F00F6"); // calendar-today
+      it.strftime(x_text, y_top + 2, id(font_text), "%a %d %b", now);
+
+      // -------------------------------------------------
+      // Footer: last updated timestamp (bottom-right)
+      // -------------------------------------------------
+      char upd[32];
+      snprintf(upd, sizeof(upd), "Last updated %02d:%02d", now.hour, now.minute);
+
+      int x1, y1, w, h;
+      it.get_text_bounds(0, 0, upd, id(font_small), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+      it.print(W - 10 - w, y_foot, id(font_small), upd);
+
+      // -------------------------------------------------
+      // Stage 2: Waiting for weather data
+      // -------------------------------------------------
+      if (!temps_ready || !rain_ready) {
+        it.print(10, 50, id(font_text), "Waiting for update...");
+        it.print(10, 78, id(font_text), "Weather data loading");
+        return;
+      }
+
+      // -------------------------------------------------
+      // Temperature row
+      // -------------------------------------------------
+      it.print(x_icon, y_temp, id(font_icons), "\U000F10C3"); // thermometer-low
+      it.printf(x_text, y_temp + 4, id(font_text), "Min %.0f°", tmin);
+
+      it.print(150, y_temp, id(font_icons), "\U000F10C2"); // thermometer-high
+      it.printf(192, y_temp + 4, id(font_text), "Max %.0f°", tmax);
+
+      // -------------------------------------------------
+      // Rain row
+      // Rain percentage is shown in red if >= 50%
+      // -------------------------------------------------
+      int rain_i = (int) lroundf(rain);
+
+      if (rain_i >= 50) {
+        it.print(x_icon, y_rain, id(font_icons), red, "\U000F058E"); // water-percent
+        it.printf(x_text, y_rain + 4, id(font_text), red, "Rain %d%%", rain_i);
+      } else {
+        it.print(x_icon, y_rain, id(font_icons), "\U000F058E"); // water-percent
+        it.printf(x_text, y_rain + 4, id(font_text), "Rain %d%%", rain_i);
+      }
+
+
+# -------------------------------------------------------------------
+# Font and icon definitions
+# - Roboto is used for text.
+# - Material Design Icons are used for UI glyphs.
+# -------------------------------------------------------------------
+font:
+  # Main text
+  - file: "gfonts://Roboto"
+    id: font_text
+    size: 22
+
+  # Smaller footer text
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 14
+
+  # Icon font
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: font_icons
+    size: 32
+    glyphs:
+      - "\U000F00F6" # calendar-today
+      - "\U000F10C3" # thermometer-low
+      - "\U000F10C2" # thermometer-high
+      - "\U000F058E" # water-percent
