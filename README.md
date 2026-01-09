@@ -173,10 +173,10 @@ Once merged, this guide will be updated to remove the custom component requireme
 This project is primarily **configuration + wiring guidance**. It references upstream projects you must install separately.
 
 ## Home Assistant Weather Integration
-- **[WillyWeather forecast integration](https://github.com/safepay/willyweather-forecast-home-assistant/tree/master)**, and while not free, shouldn't cost more than a few dollars per month dependant on your configuration.
- by `safepay`
+- **[WillyWeather forecast integration](https://github.com/safepay/willyweather-forecast-home-assistant/tree/master)** by `safepay`
 ## WeAct ePaper ESPHome custom component
-- **WeAct-Studio_ePaper** by `RaceNJason`. Original pull request by `jbergler` here - [ESPHome Pull Request #6226](https://github.com/esphome/esphome/pull/6226)
+- **[WeAct-Studio_ePaper](https://github.com/RaceNJason/WeAct-Studio_ePaper)** by `RaceNJason`.
+- Original pull request by `jbergler` here - **[ESPHome Pull Request #6226](https://github.com/esphome/esphome/pull/6226)**
 
 
 
